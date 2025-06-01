@@ -54,7 +54,7 @@ def set_cookie(driver, token):
 def wait_for_login_status(driver):
     print("Waiting for login status...")
     try:
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 30).until(
             lambda d: d.find_element(
                 By.CLASS_NAME, "welcome-wrapper__has-login"
             ).is_displayed()
@@ -68,7 +68,7 @@ def wait_for_login_status(driver):
 def wait_for_daily_reward(driver):
     print("Login status confirmed, waiting for daily login reward...")
     try:
-        WebDriverWait(driver, 10).until(lambda d: "每日登陆奖励" in d.page_source)
+        WebDriverWait(driver, 30).until(lambda d: "每日登陆奖励" in d.page_source)
     except Exception as e:
         raise RuntimeError("Daily login reward not found") from e
 
