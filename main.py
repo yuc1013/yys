@@ -69,16 +69,125 @@ def wait_for_daily_reward(driver):
     print("Login status confirmed, waiting for daily login reward...")
     try:
         WebDriverWait(driver, 30).until(lambda d: "每日登陆奖励" in d.page_source)
+        return True # 找到了
     except Exception as e:
-        raise RuntimeError("Daily login reward not found") from e
+        print("Daily login reward not found, 也许领过了")
+        return False  # 没找到
 
 
 def take_screenshot(driver, filename):
-    print("Daily login reward found, taking screenshot...")
+    # print("Daily login reward found, taking screenshot...")
     for element in driver.find_elements(By.CLASS_NAME, "van-overlay"):
         driver.execute_script("arguments[0].remove();", element)
     driver.save_screenshot(filename)
 
+from selenium.webdriver.support import expected_conditions as EC
+
+def enter_game(driver):
+    print("正在点击进入游戏")
+    try:
+        btn = WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//*[contains(text(), '进入游戏')]")
+            )
+        )
+        btn.click()
+    except Exception as e:
+        print(f"未找到“进入游戏”按钮: {e}")
+        return False
+    return True
+
+
+def click_fast_path(driver):
+    print("正在点击进入快速通道")
+    try:
+        fast_btn = WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//*[contains(text(), '快速')]")
+            )
+        )
+        fast_btn.click()
+    except Exception as e:
+        print(f"未找到“快速”按钮: {e}")
+        return False
+
+    try:
+        enter_btn = WebDriverWait(driver, 60).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//*[contains(text(), '进入游戏')]")
+            )
+        )
+        enter_btn.click()
+    except Exception as e:
+        print(f"未找到第二步“进入游戏”按钮: {e}")
+        return False
+
+    return True
+
+def click_accept(driver):
+    print("正在点击接受按钮")
+    try:
+        accept_btn = WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//span[text()='接受']/ancestor::button")
+            )
+        )
+        accept_btn.click()
+        print("点击“接受”按钮成功")
+        return True
+    except Exception as e:
+        print(f"未找到“接受”按钮，可能已经接受过: {e}")
+        return False
+
+import time
+from selenium.webdriver.common.action_chains import ActionChains
+
+def click_thrice(driver):
+    print("正在点击canvas中央")
+    size = driver.get_window_size()
+    x = size['width'] // 2
+    y = size['height'] // 2
+
+    actions = ActionChains(driver)
+    for i in range(10):  # 改为10次
+        try:
+            actions.move_by_offset(x, y).click().perform()
+            print(f"Canvas点击 {i + 1} 次完成")
+            # 点击后复位偏移
+            actions.move_by_offset(-x, -y)
+            if i < 9:
+                time.sleep(5)  # 改为每次间隔5秒
+        except Exception as e:
+            print(f"Canvas点击第 {i + 1} 次失败: {e}")
+
+
+from selenium.webdriver.common.keys import Keys
+import random
+
+
+def confuse(driver):
+    actions = ActionChains(driver)
+    try:
+        actions.send_keys('b').perform()
+        print("键盘输入 'b' 完成")
+        wait_seconds = random.randint(1, 30)
+        print(f"等待 {wait_seconds} 秒后输入 'Esc'")
+        time.sleep(wait_seconds)
+        actions.send_keys(Keys.ESCAPE).perform()
+        print("键盘输入 'Esc' 完成")
+    except Exception as e:
+        print(f"键盘输入失败: {e}")
+
+def take_domshot(driver, filename):
+    try:
+        dom = driver.page_source  # 获取完整 HTML（当前 DOM 状态）
+
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(dom)
+
+        print(f"[DOMSHOT] Saved DOM to {filename}")
+    except Exception as e:
+        print(f"[DOMSHOT ERROR] {e}")
 
 def main():
     if len(sys.argv) < 2 or not sys.argv[1]:
@@ -91,8 +200,16 @@ def main():
     try:
         set_cookie(driver, token)
         wait_for_login_status(driver)
-        wait_for_daily_reward(driver)
+        ok = wait_for_daily_reward(driver)
+        if ok:
+            take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
+        enter_game(driver)
+        ok = click_fast_path(driver)
+        ok = click_accept(driver)
+        click_thrice(driver)
         take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
+        take_domshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
+        confuse(driver)
         print("Process completed successfully.")
     finally:
         print("Closing browser...")
