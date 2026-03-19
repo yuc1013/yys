@@ -189,6 +189,44 @@ def take_domshot(driver, filename):
     except Exception as e:
         print(f"[DOMSHOT ERROR] {e}")
 
+def close_save_website_ad(driver, timeout=5):
+    """
+    等待页面上出现弹窗的关闭按钮，并点击它。
+    
+    driver: Selenium WebDriver 实例
+    timeout: 等待关闭按钮出现的最长时间（秒）
+    """
+    try:
+        # 等待关闭按钮出现
+        close_btn = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".guide-close-btn.guide-card__close-btn"))
+        )
+        close_btn.click()
+        print("弹窗已关闭")
+    except:
+        # 超时或没找到就忽略
+        print("没有弹窗需要关闭")
+    pass
+
+def close_add_to_desktop_ad(driver, timeout=5):
+    """
+    关闭“添加到桌面”弹窗的“下次再说”按钮
+    driver: Selenium WebDriver 实例
+    timeout: 最长等待秒数
+    """
+    try:
+        # 等待按钮出现并可点击
+        next_time_btn = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, "button.van-action-bar-button--first.van-dialog__cancel")
+            )
+        )
+        next_time_btn.click()
+        print("已点击“下次再说”按钮，关闭弹窗")
+    except:
+        # 超时或没找到就忽略
+        print("没有“添加到桌面”弹窗出现")
+
 def main():
     if len(sys.argv) < 2 or not sys.argv[1]:
         raise ValueError("Token is empty")
@@ -200,6 +238,8 @@ def main():
     try:
         set_cookie(driver, token)
         wait_for_login_status(driver)
+        close_save_website_ad(driver)
+        close_add_to_desktop_ad(driver)
         ok = wait_for_daily_reward(driver)
         if ok:
             take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
