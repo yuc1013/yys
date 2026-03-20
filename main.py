@@ -142,8 +142,8 @@ def click_accept(driver):
 import time
 from selenium.webdriver.common.action_chains import ActionChains
 
-def click_thrice(driver):
-    print("正在点击canvas中央")
+def click_center_x10(driver):
+    print("正在点击video中央")
     size = driver.get_window_size()
     x = size['width'] // 2
     y = size['height'] // 2
@@ -152,13 +152,13 @@ def click_thrice(driver):
     for i in range(10):  # 改为10次
         try:
             actions.move_by_offset(x, y).click().perform()
-            print(f"Canvas点击 {i + 1} 次完成")
+            print(f"video点击 {i + 1} 次完成")
             # 点击后复位偏移
             actions.move_by_offset(-x, -y)
             if i < 9:
                 time.sleep(5)  # 改为每次间隔5秒
         except Exception as e:
-            print(f"Canvas点击第 {i + 1} 次失败: {e}")
+            print(f"video点击第 {i + 1} 次失败: {e}")
 
 
 from selenium.webdriver.common.keys import Keys
@@ -210,7 +210,7 @@ def close_save_website_ad(driver, timeout=5):
 
 def close_add_to_desktop_ad(driver, timeout=5):
     """
-    关闭“添加到桌面”弹窗的“下次再说”按钮
+    点击“添加到桌面”弹窗的“下次再说”按钮
     driver: Selenium WebDriver 实例
     timeout: 最长等待秒数
     """
@@ -246,7 +246,7 @@ def main():
         enter_game(driver)
         ok = click_fast_path(driver)
         ok = click_accept(driver)
-        click_thrice(driver)
+        click_center_x10(driver)
         take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
         take_domshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
         confuse(driver)
