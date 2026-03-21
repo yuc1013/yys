@@ -22,6 +22,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 
+import time
+import re
+
+CHANNEL = "fast"
+# CHANNEL = "normal"
 
 def initialize_browser():
     print("Initializing browser...")
@@ -86,43 +91,122 @@ from selenium.webdriver.support import expected_conditions as EC
 def enter_game(driver):
     print("正在点击进入游戏")
     try:
+        time.sleep(1)
         btn = WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable(
                 (By.XPATH, "//*[contains(text(), '进入游戏')]")
             )
         )
         btn.click()
+
+        # btn = WebDriverWait(driver, 30).until(
+        #     EC.presence_of_element_located(
+        #         (By.XPATH, "//div[contains(@class,'wel-card__content--start') and contains(., '进入游戏')]")
+        #     )
+        # )
+        # driver.execute_script("arguments[0].click();", btn) # 强制触发
+
     except Exception as e:
         print(f"未找到“进入游戏”按钮: {e}")
         return False
     return True
 
 
-def click_fast_path(driver):
-    print("正在点击进入快速通道")
+def choose_channel(driver, minutes=1):
+    """
+    根据 CHANNEL 选择对应的队列 div，记录等待时间，点击并等待进入游戏按钮。
+    每个 DOM 元素查找都使用显式等待，最大等待时间 60 秒。
+
+    :param driver: selenium webdriver 实例
+    :param CHANNEL: "fast" 或 "normal"
+    :param minutes: 等待时间额外增加的分钟数
+    :return: True 如果成功点击进入游戏按钮，False 超时未找到
+    """
+    print(f"正在选择{CHANNEL}通道")
+
+    # 目标队列文本
+    target_text_map = {
+        "fast": "原点快速队列",
+        "normal": "普通队列"
+    }
+    target_text = target_text_map.get(CHANNEL)
+    if not target_text:
+        raise ValueError(f"未知 CHANNEL: {CHANNEL}")
+
+    target_item = None
+    wait_seconds = 15  # 默认等待时间
+
+    # 1️⃣ 等待并找到所有排队选项
     try:
-        fast_btn = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//*[contains(text(), '快速')]")
+        choose_items = WebDriverWait(driver, 60).until(
+            EC.presence_of_all_elements_located(
+                (By.CSS_SELECTOR, "div.coin-prior-choose-item.coin-prior-choose-item-include-info.choose-item")
             )
         )
-        fast_btn.click()
-    except Exception as e:
-        print(f"未找到“快速”按钮: {e}")
+    except Exception:
+        print("超时 60 秒未找到任何排队选项")
         return False
 
-    try:
-        enter_btn = WebDriverWait(driver, 60).until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//*[contains(text(), '进入游戏')]")
+    # 2️⃣ 找到对应 div 并解析预计等待时间
+    for item in choose_items:
+        try:
+            main_text_el = WebDriverWait(item, 60).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".coin-prior-choose-item-main__desc__main"))
             )
+            if main_text_el.text.strip() == target_text:
+                target_item = item
+
+                # 获取等待时间元素
+                time_el = WebDriverWait(item, 60).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".coin-prior-choose-item-info__time"))
+                )
+                time_text = time_el.text.strip()
+
+                # 提取数字
+                match = re.search(r"(\d+)", time_text)
+                if match:
+                    value = int(match.group(1))
+                    if "秒" in time_text:
+                        wait_seconds = value
+                    elif "分钟" in time_text:
+                        wait_seconds = value * 60
+                break
+        except Exception:
+            continue
+    
+    print(f"{CHANNEL}通道预计等待{wait_seconds}s")
+
+    if not target_item:
+        print(f"未找到 {CHANNEL} 队列选项")
+        return False
+
+    # 3️⃣ 点击目标 div
+    try:
+        clickable_item = WebDriverWait(target_item, 60).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".coin-prior-choose-item-main__desc__main"))
         )
+        clickable_item.click()
+    except Exception:
+        print(f"超时 60 秒无法点击 {CHANNEL} 队列选项")
+        return False
+
+    # 4️⃣ 等待“进入游戏”按钮出现
+    total_wait = wait_seconds + minutes * 60
+    try:
+        enter_btn = WebDriverWait(driver, total_wait).until(
+            EC.element_to_be_clickable((
+                By.XPATH,
+                "//*[starts-with(normalize-space(.), '进入游戏(') or starts-with(normalize-space(.), '进入游戏（')]"
+            ))
+        )
+        # 5️⃣ 点击按钮
         enter_btn.click()
-    except Exception as e:
-        print(f"未找到第二步“进入游戏”按钮: {e}")
+        print("已点击进入游戏（第二步）按钮")
+        return True
+    except Exception:
+        print(f"超时 {total_wait} 秒未找到进入游戏按钮")
         return False
 
-    return True
 
 def click_accept(driver):
     print("正在点击接受按钮")
@@ -244,7 +328,7 @@ def main():
         if ok:
             take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
         enter_game(driver)
-        ok = click_fast_path(driver)
+        ok = choose_channel(driver)
         ok = click_accept(driver)
         click_center_x10(driver)
         take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
