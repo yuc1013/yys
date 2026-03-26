@@ -21,6 +21,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.common.exceptions import WebDriverException
 
 import time
 import re
@@ -28,19 +29,23 @@ import re
 CHANNEL = "fast"
 # CHANNEL = "normal"
 
+TASKS = [
+    ("ys", "https://ys.mihoyo.com/cloud"),
+    ("sr", "https://sr.mihoyo.com/cloud"),
+]
+
 def initialize_browser():
     print("Initializing browser...")
     options = ChromeOptions()
-    options.add_argument("--headless=new")
+    # options.add_argument("--headless=new")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--no-sandbox")
     return webdriver.Chrome(options=options)
 
-
-def set_cookie(driver, token):
+def set_cookie(driver, token, url):
     print("Setting up browser options...")
-    driver.get("https://ys.mihoyo.com/cloud")
-    driver.delete_all_cookies()
+    driver.get(url)
+    # driver.delete_all_cookies()
     driver.add_cookie(
         {
             "name": "uni_web_token",
@@ -59,7 +64,7 @@ def set_cookie(driver, token):
 def wait_for_login_status(driver):
     print("Waiting for login status...")
     try:
-        WebDriverWait(driver, 30).until(
+        WebDriverWait(driver, 3000).until(
             lambda d: d.find_element(
                 By.CLASS_NAME, "welcome-wrapper__has-login"
             ).is_displayed()
@@ -92,12 +97,23 @@ def enter_game(driver):
     print("正在点击进入游戏")
     try:
         time.sleep(1)
+        # 使用 CSS_SELECTOR 定位包含该 class 的元素
+        # 注意：如果 class 中有空格，CSS 选择器需要用点号(.)连接
+        target_class = ".wel-card__content--start"
+        
         btn = WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//*[contains(text(), '进入游戏')]")
-            )
+            EC.element_to_be_clickable((By.CSS_SELECTOR, target_class))
         )
+        
+        # 执行点击
         btn.click()
+        print("成功点击公告/协议页面的启动区域")
+        # btn = WebDriverWait(driver, 30).until(
+        #     EC.element_to_be_clickable(
+        #         (By.XPATH, "//*[contains(text(), '进入游戏')]")
+        #     )
+        # )
+        # btn.click()
 
         # btn = WebDriverWait(driver, 30).until(
         #     EC.presence_of_element_located(
@@ -191,7 +207,12 @@ def choose_channel(driver, minutes=1):
         return False
 
     # 4️⃣ 等待“进入游戏”按钮出现
-    total_wait = wait_seconds + minutes * 60
+    total_wait = wait_seconds
+    if CHANNEL == "normal":
+        total_wait += minutes*60
+    elif CHANNEL == "fast":
+        total_wait += 30  # fast 额外等30秒，给它个缓冲
+
     try:
         enter_btn = WebDriverWait(driver, total_wait).until(
             EC.element_to_be_clickable((
@@ -311,6 +332,50 @@ def close_add_to_desktop_ad(driver, timeout=5):
         # 超时或没找到就忽略
         print("没有“添加到桌面”弹窗出现")
 
+def update_user_agreement_flag(driver):
+    try:
+        # 1. 获取 Cookie 中的 _MHYUUID
+        mhy_uuid = driver.get_cookie("_MHYUUID")
+        if not mhy_uuid:
+            print("未找到 _MHYUUID Cookie，请确认页面已加载且用户已初始化。")
+            return False
+        
+        uuid_value = mhy_uuid['value']
+        
+        # 2. 拼接完整的 localStorage Key
+        storage_key = f"MIHOYOSDK_zh-cn_hkrpg_cn_1_0_USER_AGREEMENT_SHOW_FLAG_{uuid_value}"
+        
+        # 3. 执行 JS 修改逻辑
+        # 我们在 JS 内部处理 JSON 解析，这样更安全且减少 Python 与浏览器间的往返
+        script = """
+        var key = arguments[0];
+        var dataRaw = localStorage.getItem(key);
+        if (dataRaw) {
+            try {
+                var data = JSON.parse(dataRaw);
+                data.isNeedShow = false;  // 修改目标字段
+                localStorage.setItem(key, JSON.stringify(data));
+                return true;
+            } catch (e) {
+                console.error("解析 localStorage JSON 失败", e);
+                return false;
+            }
+        }
+        return false;
+        """
+        
+        success = driver.execute_script(script, storage_key)
+        
+        if success:
+            print(f"成功将 {storage_key} 中的 isNeedShow 修改为 false")
+        else:
+            print(f"未能找到对应的 Key: {storage_key}")
+        return success
+
+    except WebDriverException as e:
+        print(f"Selenium 执行出错: {e}")
+        return False
+
 def main():
     if len(sys.argv) < 2 or not sys.argv[1]:
         raise ValueError("Token is empty")
@@ -319,22 +384,37 @@ def main():
         raise ValueError("Token is invalid, it should end with '_mhy'")
 
     driver = initialize_browser()
+    
     try:
-        set_cookie(driver, token)
-        wait_for_login_status(driver)
-        close_save_website_ad(driver)
-        close_add_to_desktop_ad(driver)
-        ok = wait_for_daily_reward(driver)
-        if ok:
-            take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
-        enter_game(driver)
-        ok = choose_channel(driver)
-        ok = click_accept(driver)
-        click_center_x10(driver)
-        take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
-        take_domshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
-        confuse(driver)
-        print("Process completed successfully.")
+        for name, url in TASKS:
+            print(f"--- Starting task for {name} ---")
+            try:
+                set_cookie(driver, token, url)
+                wait_for_login_status(driver)
+                close_save_website_ad(driver)
+                close_add_to_desktop_ad(driver)
+                ok = wait_for_daily_reward(driver)
+                if ok:
+                    take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
+                if name == "sr":
+                    ok = update_user_agreement_flag(driver)
+                    time.sleep(5)
+                enter_game(driver)
+                ok = choose_channel(driver)
+                if name == "ys":
+                    ok = click_accept(driver)
+                time.sleep(5)
+                click_center_x10(driver)
+                take_screenshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
+                take_domshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
+                confuse(driver)
+                print("Process completed successfully.")
+            except Exception as e:
+                print(f"Error occurred in {name}: {e}")
+                take_screenshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
+                take_domshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
+                # 这里不抛出异常，让循环继续处理下一个游戏
+                continue
     finally:
         print("Closing browser...")
         driver.quit()
