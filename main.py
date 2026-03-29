@@ -37,7 +37,7 @@ TASKS = [
 def initialize_browser():
     print("Initializing browser...")
     options = ChromeOptions()
-    # options.add_argument("--headless=new")
+    options.add_argument("--headless=new")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--no-sandbox")
     return webdriver.Chrome(options=options)
@@ -78,7 +78,7 @@ def wait_for_login_status(driver):
 def wait_for_daily_reward(driver):
     print("Login status confirmed, waiting for daily login reward...")
     try:
-        WebDriverWait(driver, 30).until(lambda d: "每日登陆奖励" in d.page_source)
+        WebDriverWait(driver, 30).until(lambda d: "每日登陆奖励" in d.page_source or "活动商品赠送" in d.page_source)
         return True # 找到了
     except Exception as e:
         print("Daily login reward not found, 也许领过了")
@@ -154,13 +154,13 @@ def choose_channel(driver, minutes=1):
 
     # 1️⃣ 等待并找到所有排队选项
     try:
-        choose_items = WebDriverWait(driver, 60).until(
+        choose_items = WebDriverWait(driver, 30).until(
             EC.presence_of_all_elements_located(
                 (By.CSS_SELECTOR, "div.coin-prior-choose-item.coin-prior-choose-item-include-info.choose-item")
             )
         )
     except Exception:
-        print("超时 60 秒未找到任何排队选项")
+        print("超时 30 秒未找到任何排队选项")
         return False
 
     # 2️⃣ 找到对应 div 并解析预计等待时间
@@ -247,19 +247,20 @@ def click_accept(driver):
 import time
 from selenium.webdriver.common.action_chains import ActionChains
 
-def click_center_x10(driver):
+def click_center_x20(driver):
     print("正在点击video中央")
     size = driver.get_window_size()
     x = size['width'] // 2
     y = size['height'] // 2
+    print(f"窗口大小: {size}, 计算中心点坐标: ({x}, {y})")
 
     actions = ActionChains(driver)
-    for i in range(10):  # 改为10次
+    for i in range(20):  # 改为20次
         try:
             actions.move_by_offset(x, y).click().perform()
             print(f"video点击 {i + 1} 次完成")
             # 点击后复位偏移
-            actions.move_by_offset(-x, -y)
+            actions.move_by_offset(-x, -y).perform()
             if i < 9:
                 time.sleep(5)  # 改为每次间隔5秒
         except Exception as e:
@@ -395,7 +396,7 @@ def main():
                 close_add_to_desktop_ad(driver)
                 ok = wait_for_daily_reward(driver)
                 if ok:
-                    take_screenshot(driver, datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
+                    take_screenshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
                 if name == "sr":
                     ok = update_user_agreement_flag(driver)
                     time.sleep(5)
@@ -411,8 +412,6 @@ def main():
                 print("Process completed successfully.")
             except Exception as e:
                 print(f"Error occurred in {name}: {e}")
-                take_screenshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
-                take_domshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
                 # 这里不抛出异常，让循环继续处理下一个游戏
                 continue
     finally:
