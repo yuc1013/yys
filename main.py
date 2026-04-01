@@ -261,7 +261,7 @@ def click_center_x20(driver):
             print(f"video点击 {i + 1} 次完成")
             # 点击后复位偏移
             actions.move_by_offset(-x, -y).perform()
-            if i < 9:
+            if i < 19:
                 time.sleep(5)  # 改为每次间隔5秒
         except Exception as e:
             print(f"video点击第 {i + 1} 次失败: {e}")
@@ -405,7 +405,7 @@ def main():
                 if name == "ys":
                     ok = click_accept(driver)
                 time.sleep(5)
-                click_center_x10(driver)
+                click_center_x20(driver)
                 take_screenshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".png")
                 take_domshot(driver, name + "-" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".html")
                 confuse(driver)
